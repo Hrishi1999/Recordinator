@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
   runApp(MyApp());
@@ -36,10 +38,16 @@ class _RecordPageState extends State<RecordPage> {
   int _seconds = 0;
 
   Timer _timer;
-  bool _isRunning = false;
+  bool _isRecording = false;
 
   IconData _playButton = Icons.play_arrow_rounded;
   IconData _stopButton = Icons.stop_rounded;
+
+  FlutterSoundRecorder _recorder = FlutterSoundRecorder();
+  bool _recorderIsInited = false; 
+
+  FlutterSoundPlayer _player = FlutterSoundPlayer();
+  bool _playerIsIntited = false;
 
   void _startTimer() {
     _seconds = 0;
@@ -58,7 +66,7 @@ class _RecordPageState extends State<RecordPage> {
     _timer.cancel();
   }
 
-  String getTime(int seconds) {
+  String _getTime(int seconds) {
     int s = seconds % 60; 
     int m = ((seconds / 60) % 60).toInt(); 
     int h = (seconds ~/ 3600).toInt(); 
@@ -66,12 +74,58 @@ class _RecordPageState extends State<RecordPage> {
     return h.toString() + "h " + m.toString() + "m " + s.toString() + "s";
   }
 
-  @override
-  void initState() async {
-    super.initState();
-    if (await Permission.microphone.request().isGranted) {
+  void _getPermissions () async {
+    await Permission.microphone.request();
+  }
 
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory.path;
+  } 
+
+  Future<void> record() async {
+    await _recorder.startRecorder(
+      toFile: _localPath.toString(),
+      codec: Codec.aacADTS,
+    );
+  }
+
+
+  Future<void> stopRecorder() async {
+    await _recorder.stopRecorder();
+  }
+
+  void play() async {
+    await _player.startPlayer(
+      fromURI: _localPath.toString(),
+      codec: Codec.mp3,
+      whenFinished: (){setState((){});}
+    );
+    setState(() {});
+  }
+
+  Future<void> stopPlayer() async {
+    if (_player != null) {
+      await _player.stopPlayer();
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _getPermissions();
+
+    _recorder.openAudioSession().then((value) {
+      setState(() {
+        _recorderIsInited = true;
+      });
+    });
+
+    _player.openAudioSession().then((value) {
+      setState(() {
+        _playerIsIntited = true;
+      });
+    });
   }
 
   @override
@@ -106,7 +160,7 @@ class _RecordPageState extends State<RecordPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Text(getTime(_seconds), 
+            Text(_getTime(_seconds), 
               style: TextStyle( fontFamily: 'MaterialYou', fontSize: 29, fontWeight: FontWeight.w100)
             ),
             Padding(
@@ -117,18 +171,20 @@ class _RecordPageState extends State<RecordPage> {
                 child: FloatingActionButton.extended(
                   onPressed: () {
                     setState(() {
-                      if (_isRunning) {
+                      if (_isRecording) {
                         _stopTimer();
+                        play();
                       }
                       else {
                         _startTimer();
+                        record();
                       }
-                      _isRunning = !_isRunning;
+                      _isRecording = !_isRecording;
                     });
                   },
                   elevation: 0,
                   label: Text('Record'),
-                  icon: Icon(_isRunning ? _stopButton : _playButton),
+                  icon: Icon(_isRecording ? _stopButton : _playButton),
                 ),
               ),
             )
@@ -136,5 +192,13 @@ class _RecordPageState extends State<RecordPage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    // Be careful : you must `close` the audio session when you have finished with it.
+    _recorder.closeAudioSession();
+    _recorder = null;
+    super.dispose();
   }
 }
