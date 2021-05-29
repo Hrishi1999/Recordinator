@@ -47,7 +47,12 @@ class _RecordPageState extends State<RecordPage> {
   bool _recorderIsInited = false; 
 
   FlutterSoundPlayer _player = FlutterSoundPlayer();
+  StreamSubscription _playerSubscription;
   bool _playerIsIntited = false;
+  bool _isPlaying = false;
+
+  double currentValue = 0;
+  double maxValue = 1000;
 
   void _startTimer() {
     _seconds = 0;
@@ -90,17 +95,18 @@ class _RecordPageState extends State<RecordPage> {
     );
   }
 
-
   Future<void> stopRecorder() async {
     await _recorder.stopRecorder();
   }
 
   void play() async {
+    _player.setSubscriptionDuration(Duration(milliseconds: 10));
     await _player.startPlayer(
       fromURI: _localPath.toString(),
       codec: Codec.mp3,
       whenFinished: (){setState((){});}
     );
+    setupListener();
     setState(() {});
   }
 
@@ -108,6 +114,15 @@ class _RecordPageState extends State<RecordPage> {
     if (_player != null) {
       await _player.stopPlayer();
     }
+  }
+
+  void setupListener() {
+    _playerSubscription = _player.onProgress.listen((event) {
+      setState(() {
+        currentValue = event.position.inSeconds.toDouble();
+        maxValue = event.duration.inSeconds.toDouble();
+      });
+    });
   }
 
   @override
@@ -126,6 +141,7 @@ class _RecordPageState extends State<RecordPage> {
         _playerIsIntited = true;
       });
     });
+
   }
 
   @override
@@ -173,7 +189,6 @@ class _RecordPageState extends State<RecordPage> {
                     setState(() {
                       if (_isRecording) {
                         _stopTimer();
-                        play();
                       }
                       else {
                         _startTimer();
@@ -186,6 +201,65 @@ class _RecordPageState extends State<RecordPage> {
                   label: Text('Record'),
                   icon: Icon(_isRecording ? _stopButton : _playButton),
                 ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 18),
+              child: Container(
+                height: 150,
+                width: 375,
+                child: Card(
+                  color: Color(0xFFFDF2F0),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16.0),
+                        child: Slider(
+                          activeColor: Theme.of(context).accentColor,
+                          value: currentValue,
+                          min: 0,
+                          max: maxValue,
+                          onChanged: (double value) {
+                            setState(() {
+                              currentValue = value;
+                              _player.seekToPlayer(Duration(milliseconds: value.toInt()));
+                            });
+                          },
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          FloatingActionButton(
+                            elevation: 0,
+                            child: Icon(_isPlaying ? _stopButton : _playButton),
+                            backgroundColor: Colors.white,
+                            onPressed: () {
+                              setState(() {
+                                if (_isPlaying) {
+                                  stopPlayer();
+                                }
+                                else {
+                                  play();
+                                }
+                                _isPlaying = !_isPlaying;
+                              });
+                            }
+                          ),
+                          SizedBox(width: 10,),
+                          FloatingActionButton(
+                            elevation: 0,
+                            child: Icon(Icons.save_rounded),
+                            backgroundColor: Colors.white,
+                            onPressed: () {
+                              
+                            }
+                          )
+                        ],
+                      )
+                    ],
+                  ),
+                )
               ),
             )
           ],
